@@ -28,16 +28,16 @@ exports.handler = async (event) => {
 
     const extractedProfile = extractSignals(cvText);
     const research = await collectResearch(body.urls || {}, extractedProfile);
-    const apiKey = process.env.ANTHROPIC_API_KEY;
+    const apiKey = process.env.GEMINI_API_KEY;
 
     if (!apiKey) {
       return json(503, {
         error:
-          "The analysis service is not configured. ANTHROPIC_API_KEY is missing from the environment."
+          "The analysis service is not configured. GEMINI_API_KEY is missing from the environment."
       });
     }
 
-    const audit = await generateAuditWithClaude({
+    const audit = await generateAuditWithGemini({
       apiKey,
       cvText,
       extractedProfile,
@@ -51,10 +51,10 @@ exports.handler = async (event) => {
     });
   } catch (error) {
     console.error(error);
-    if (error.message?.startsWith("Claude request failed")) {
+    if (error.message?.startsWith("Gemini request failed")) {
       return json(502, {
         error:
-          "Claude analysis failed. Check that ANTHROPIC_API_KEY is a valid key and the account has credits."
+          "Gemini analysis failed. Check that GEMINI_API_KEY is a valid key from Google AI Studio."
       });
     }
 
@@ -358,9 +358,9 @@ function normalizeUrl(value = "") {
   }
 }
 
-async function generateAuditWithClaude({ apiKey, cvText, extractedProfile, research }) {
-  const model = process.env.CLAUDE_MODEL || "claude-opus-4-8";
-  const endpoint = "https://api.anthropic.com/v1/messages";
+async function generateAuditWithGemini({ apiKey, cvText, extractedProfile, research }) {
+  const model = process.env.GEMINI_MODEL || "gemini-1.5-flash";
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
   const userContent = JSON.stringify(
     {
@@ -374,26 +374,24 @@ async function generateAuditWithClaude({ apiKey, cvText, extractedProfile, resea
 
   const response = await fetch(endpoint, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01"
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      model,
-      max_tokens: 8192,
-      system: systemPrompt(),
-      messages: [{ role: "user", content: userContent }]
+      system_instruction: { parts: [{ text: systemPrompt() }] },
+      contents: [{ role: "user", parts: [{ text: userContent }] }],
+      generationConfig: {
+        maxOutputTokens: 8192,
+        temperature: 0.3
+      }
     })
   });
 
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(`Claude request failed: ${text}`);
+    throw new Error(`Gemini request failed: ${text}`);
   }
 
   const data = await response.json();
-  const text = data.content?.[0]?.text || "{}";
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
   return JSON.parse(stripCodeFence(text));
 }
 
