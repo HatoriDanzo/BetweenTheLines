@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Between The Lines is an AI recruitment intelligence tool that compares CV evidence with public professional information."
+    />
+    <title>Between The Lines</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%232563eb'/%3E%3Cpath d='M18 20h28v6H18zm0 12h22v6H18zm0 12h28v6H18z' fill='white'/%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="ci">
+      <nav class="ci-nav">
+        <button class="ci-nav-logo" id="homeLogo" type="button">Between<em>The Lines</em></button>
+        <div class="ci-nav-links">
+          <button class="ci-nav-btn hide-sm" id="sampleReportBtn" type="button">Sample report</button>
+          <button class="ci-nav-btn hide-sm" id="howItWorksBtn" type="button">How it works</button>
+          <button class="ci-btn-primary" id="navUploadBtn" type="button">
+            <i class="ti ti-upload" aria-hidden="true"></i>
+            Upload CV
+          </button>
+        </div>
+      </nav>
+
+      <main>
+        <section class="view" id="homeView">
+          <div class="ci-hero-wrap">
+            <div class="ci-hero-left">
+              <div class="ci-section-eyebrow">AI-powered recruiter intelligence</div>
+              <h1 class="ci-hero-h1">
+                Understand any CV<br />
+                in <span class="hi">60 seconds</span>
+              </h1>
+              <p class="ci-hero-sub">
+                See what a CV says, what it implies, and what it leaves unanswered.
+              </p>
+              <div class="ci-hero-actions">
+                <button class="ci-btn-primary lg" id="heroUploadBtn" type="button">
+                  <i class="ti ti-upload" aria-hidden="true"></i>
+                  Upload CV
+                </button>
+                <button class="ci-btn-outline lg" id="heroSampleBtn" type="button">View sample report</button>
+              </div>
+            </div>
+            <div class="ci-hero-right">
+              <div class="ci-preview">
+                <div class="ci-preview-eyebrow">Professional Identity</div>
+                <div class="ci-preview-name">Sarah Chen</div>
+                <div class="ci-preview-role">Senior Product Manager · 8 yrs experience</div>
+                <div class="ci-preview-body">
+                  Sarah Chen presents as a mid-to-senior Product Manager with approximately eight years of experience across B2B SaaS and fintech verticals.
+                </div>
+                <div class="ci-preview-divider"></div>
+                <div class="ci-preview-conf">
+                  <span class="ci-preview-conf-label">Evidence posture</span>
+                  <span class="ci-preview-conf-val">Clear</span>
+                </div>
+                <div class="ci-preview-bar"><div class="ci-preview-bar-fill"></div></div>
+                <div class="ci-preview-tags">
+                  <span class="ci-tag-strong">Product Strategy</span>
+                  <span class="ci-tag-mod">Data Analysis</span>
+                  <span class="ci-tag-strong">Go-to-Market</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="ci-band" id="howItWorks">
+            <div class="ci-band-inner">
+              <div class="ci-section-eyebrow">How it works</div>
+              <div class="ci-band-h2">From upload to insight in three steps</div>
+              <div class="ci-how-grid">
+                <div class="ci-how-card">
+                  <div class="ci-how-num">Step 1</div>
+                  <div class="ci-how-icon-wrap"><img src="icon-upload.png" alt="Upload" class="ci-how-icon-img" /></div>
+                  <div class="ci-how-title">Upload CV</div>
+                  <div class="ci-how-desc">Drag and drop a PDF or DOCX, then optionally add LinkedIn, portfolio, website, or GitHub evidence.</div>
+                </div>
+                <div class="ci-how-card">
+                  <div class="ci-how-num">Step 2</div>
+                  <div class="ci-how-icon-wrap"><img src="icon-analyze.png" alt="AI Analysis" class="ci-how-icon-img" /></div>
+                  <div class="ci-how-title">AI professional analysis</div>
+                  <div class="ci-how-desc">The engine reads the CV like an experienced recruiter, looking at trajectory, gaps, evidence quality, and public alignment.</div>
+                </div>
+                <div class="ci-how-card">
+                  <div class="ci-how-num">Step 3</div>
+                  <div class="ci-how-icon-wrap"><img src="icon-brain.png" alt="Insights" class="ci-how-icon-img" /></div>
+                  <div class="ci-how-title">Instant recruiter insights</div>
+                  <div class="ci-how-desc">A structured report surfaces professional identity, supported strengths, missing evidence, and interview focus areas.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="ci-white-section">
+            <div class="ci-white-inner">
+              <div class="ci-section-eyebrow">What you get</div>
+              <div class="ci-band-h2 ci-value-heading">A second opinion from a senior recruiter</div>
+              <div class="ci-val-grid">
+                <div>
+                  <div class="ci-val-icon"><i class="ti ti-id-badge-2" aria-hidden="true"></i></div>
+                  <div class="ci-val-title">Professional identity</div>
+                  <div class="ci-val-desc">Understand who the candidate appears to be, not just the roles they have held.</div>
+                </div>
+                <div>
+                  <div class="ci-val-icon"><i class="ti ti-zoom-exclamation" aria-hidden="true"></i></div>
+                  <div class="ci-val-title">Missing evidence detection</div>
+                  <div class="ci-val-desc">Surface gaps around impact, leadership scale, commercial ownership, certifications, and public alignment.</div>
+                </div>
+                <div>
+                  <div class="ci-val-icon"><i class="ti ti-message-question" aria-hidden="true"></i></div>
+                  <div class="ci-val-title">Interview guidance</div>
+                  <div class="ci-val-desc">Receive targeted recruiter questions built from the actual gaps and ambiguities in the CV.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="ci-band">
+            <div class="ci-band-inner">
+              <div class="ci-section-eyebrow">Roadmap</div>
+              <div class="ci-band-h2 ci-roadmap-heading">Coming soon</div>
+              <p class="ci-band-sub">The platform is expanding. Here is what is being built.</p>
+              <div class="ci-soon-grid">
+                <div class="ci-soon-card"><div class="ci-soon-badge">Coming Soon</div><div class="ci-soon-icon"><i class="ti ti-zoom-in" aria-hidden="true"></i></div><div class="ci-soon-title">Deep Candidate Audit</div><div class="ci-soon-desc">Cross-reference CV, profile evidence, publications, and role history.</div></div>
+                <div class="ci-soon-card"><div class="ci-soon-badge">Coming Soon</div><div class="ci-soon-icon"><i class="ti ti-users-group" aria-hidden="true"></i></div><div class="ci-soon-title">Bulk Candidate Review</div><div class="ci-soon-desc">Analyse a full shortlist simultaneously.</div></div>
+                <div class="ci-soon-card"><div class="ci-soon-badge">Coming Soon</div><div class="ci-soon-icon"><i class="ti ti-layout-dashboard" aria-hidden="true"></i></div><div class="ci-soon-title">Recruiter Workspace</div><div class="ci-soon-desc">Save reports, add notes, and share with hiring managers.</div></div>
+                <div class="ci-soon-card"><div class="ci-soon-badge">Coming Soon</div><div class="ci-soon-icon"><i class="ti ti-arrows-diff" aria-hidden="true"></i></div><div class="ci-soon-title">Candidate Comparison</div><div class="ci-soon-desc">Compare evidence gaps and strengths across candidates.</div></div>
+                <div class="ci-soon-card"><div class="ci-soon-badge">Coming Soon</div><div class="ci-soon-icon"><i class="ti ti-file-description" aria-hidden="true"></i></div><div class="ci-soon-title">PDF Reports</div><div class="ci-soon-desc">Download branded reports for clients or internal teams.</div></div>
+                <div class="ci-soon-card"><div class="ci-soon-badge">Coming Soon</div><div class="ci-soon-icon"><i class="ti ti-chart-histogram" aria-hidden="true"></i></div><div class="ci-soon-title">Salary Benchmarking</div><div class="ci-soon-desc">Compare compensation expectations against market ranges.</div></div>
+              </div>
+            </div>
+          </div>
+
+          <footer class="ci-footer-wrap">
+            <div class="ci-footer-inner">
+              <div class="ci-footer-logo">Between<em>The Lines</em></div>
+              <div class="ci-footer-copy">© 2026 Between The Lines</div>
+            </div>
+          </footer>
+        </section>
+
+        <section class="view hidden" id="uploadView">
+          <div class="ci-upload-page">
+            <button class="ci-back-btn" id="backHomeBtn" type="button">
+              <i class="ti ti-arrow-left" aria-hidden="true"></i>
+              Back
+            </button>
+            <div class="ci-section-eyebrow">New analysis</div>
+            <h1 class="ci-upload-h1">Upload a CV to analyse</h1>
+            <p class="ci-upload-sub">Add public professional URLs when available. The report is generated from supplied evidence and public information.</p>
+
+            <form id="analysisForm" class="ci-upload-form">
+              <label class="ci-upload-area" id="uploadArea" for="cvFile">
+                <input id="cvFile" name="cvFile" type="file" accept=".pdf,.docx" required />
+                <div class="ci-upload-icon-wrap"><i class="ti ti-cloud-upload" aria-hidden="true"></i></div>
+                <div class="ci-upload-main" id="uploadMain">Drag and drop a CV here</div>
+                <div class="ci-upload-hint">or click to browse files</div>
+                <span class="ci-btn-primary ci-fake-file-btn">Choose file</span>
+                <div class="ci-upload-formats" id="fileName">Accepts PDF and DOCX · Max 6 MB</div>
+              </label>
+
+              <div class="ci-url-panel">
+                <label class="ci-url-field">
+                  <span>LinkedIn URL</span>
+                  <input type="url" name="linkedinUrl" placeholder="https://linkedin.com/in/..." />
+                </label>
+                <label class="ci-url-field">
+                  <span>Portfolio URL</span>
+                  <input type="url" name="portfolioUrl" placeholder="https://..." />
+                </label>
+                <label class="ci-url-field">
+                  <span>Personal Website</span>
+                  <input type="url" name="websiteUrl" placeholder="https://..." />
+                </label>
+                <label class="ci-url-field">
+                  <span>GitHub URL</span>
+                  <input type="url" name="githubUrl" placeholder="https://github.com/..." />
+                </label>
+              </div>
+
+              <button class="ci-btn-primary lg ci-submit-btn" id="analyzeButton" type="submit">
+                <i class="ti ti-sparkles" aria-hidden="true"></i>
+                Run Professional Audit
+              </button>
+            </form>
+
+            <div class="ci-privacy-box">
+              <i class="ti ti-shield-lock" aria-hidden="true"></i>
+              <div>
+                <div class="ci-privacy-title">Privacy disclaimer</div>
+                <div class="ci-privacy-copy">
+                  This analysis is generated from information supplied by the user and publicly accessible professional information. It is intended as an informational aid and should not be used as the sole basis for employment decisions.
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="view hidden" id="analyzingView">
+          <div class="ci-analyzing">
+            <div class="ci-analyzing-inner">
+              <div class="ci-spinner" role="status" aria-label="Analysing"></div>
+              <div class="ci-a-title">Analysing CV...</div>
+              <ul class="ci-step-list" id="stepList"></ul>
+            </div>
+          </div>
+        </section>
+
+        <section class="view hidden" id="reportView">
+          <div class="ci-report" id="report"></div>
+        </section>
+      </main>
+    </div>
+
+    <script src="./app.js" type="module"></script>
+  </body>
+</html>

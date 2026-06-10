@@ -1,0 +1,17 @@
+{
+  "name": "between-the-lines",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Portfolio-quality AI recruitment intelligence tool for CV and public profile assessment.",
+  "scripts": {
+    "dev": "npx netlify-cli dev --dir public",
+    "serve": "npx serve public",
+    "lint": "node --check netlify/functions/analyze.js && node --check public/app.js",
+    "test": "npm run lint"
+  },
+  "dependencies": {
+    "cheerio": "^1.1.2",
+    "mammoth": "^1.11.0",
+    "pdf-parse": "^2.4.5"
+  }
+}
