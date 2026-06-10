@@ -3,7 +3,7 @@ const mammoth = require("mammoth");
 const pdfParse = require("pdf-parse/lib/pdf-parse.js");
 
 const MAX_CV_CHARS = 60000;
-const MAX_RESEARCH_CHARS = 24000;
+const MAX_RESEARCH_CHARS = 48000;
 const URL_FETCH_TIMEOUT_MS = 7000;
 
 exports.handler = async (event) => {
@@ -221,21 +221,29 @@ async function collectResearch(urls, profile) {
 
 function buildSearchQueries(profile) {
   const name = profile.name === "Candidate" ? "" : profile.name;
-  const parts = [
-    [name, profile.industry].filter(Boolean).join(" "),
-    [name, profile.companies[0]].filter(Boolean).join(" "),
-    [name, profile.jobTitles[0]].filter(Boolean).join(" ")
-  ].filter((query) => query && query.length > 4);
+  if (!name) return [];
 
-  return unique(parts).slice(0, 3);
+  const parts = [
+    `"${name}" LinkedIn`,
+    [name, profile.companies[0]].filter(Boolean).join(" ") + " LinkedIn",
+    [name, profile.jobTitles[0]].filter(Boolean).join(" "),
+    `"${name}" site:linkedin.com`,
+    [name, profile.companies[0], profile.industry].filter(Boolean).join(" ")
+  ].filter((query) => query && query.length > 6);
+
+  return unique(parts).slice(0, 5);
 }
 
 async function fetchPageEvidence(url) {
   try {
+    const isLinkedIn = url.includes("linkedin.com");
     const response = await fetchWithTimeout(url, {
       headers: {
-        "User-Agent": "BetweenTheLinesRecruitmentAudit/1.0",
-        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Cache-Control": "no-cache"
       }
     });
 
@@ -245,15 +253,29 @@ async function fetchPageEvidence(url) {
 
     const html = await response.text();
     const $ = cheerio.load(html);
-    $("script, style, noscript, svg").remove();
+    $("script, style, noscript, svg, nav, footer, header").remove();
+
     const title = cleanText($("title").first().text()).slice(0, 160);
-    const description = cleanText($('meta[name="description"]').attr("content") || "").slice(0, 280);
-    const pageText = cleanText($("body").text()).slice(0, 1400);
+    const description = cleanText($('meta[name="description"]').attr("content") || "").slice(0, 500);
+
+    let pageText = "";
+    if (isLinkedIn) {
+      // LinkedIn public profiles expose structured sections
+      const sections = [
+        $('section[data-section="summary"]').text(),
+        $('section[data-section="experience"]').text(),
+        $(".profile-section-card").text(),
+        $("main").text()
+      ].filter(Boolean);
+      pageText = cleanText(sections.join(" ")).slice(0, 3000);
+    } else {
+      pageText = cleanText($("body").text()).slice(0, 2000);
+    }
 
     return {
       status: "collected",
       title,
-      excerpt: description || pageText
+      excerpt: [description, pageText].filter(Boolean).join(" ").slice(0, 3000)
     };
   } catch (error) {
     return { status: "unavailable", title: "", excerpt: "Could not retrieve this public page." };
@@ -265,8 +287,9 @@ async function searchPublicWeb(query) {
     const url = `https://duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
     const response = await fetchWithTimeout(url, {
       headers: {
-        "User-Agent": "Mozilla/5.0 BetweenTheLinesRecruitmentAudit/1.0",
-        Accept: "text/html"
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9"
       }
     });
 
@@ -286,7 +309,22 @@ async function searchPublicWeb(query) {
       }
     });
 
-    return results.slice(0, 4);
+    const topResults = results.slice(0, 5);
+
+    // Fetch the actual LinkedIn result pages for richer text
+    const enriched = await Promise.all(
+      topResults.map(async (result) => {
+        if (result.url.includes("linkedin.com")) {
+          const page = await fetchPageEvidence(result.url);
+          if (page.status === "collected" && page.excerpt.length > 100) {
+            return { ...result, pageText: page.excerpt.slice(0, 1500) };
+          }
+        }
+        return result;
+      })
+    );
+
+    return enriched;
   } catch (error) {
     return [];
   }
@@ -366,24 +404,42 @@ async function generateAuditWithOpenAI({ apiKey, cvText, extractedProfile, resea
 
 function systemPrompt() {
   return `
-You are a Senior Talent Assessment Consultant and Executive Recruiter with 20+ years of experience. You read CVs the way a seasoned hiring manager does — not summarising, but interpreting. You form sharp, opinionated views on professional identity, trajectory, and fit.
+You are a Senior Talent Assessment Consultant and Executive Recruiter with 20+ years of experience.
 
-Your job is to produce an in-depth professional audit that reads like expert recruiter commentary, not a generic summary. Be direct, specific, and insightful. Draw clear conclusions from the evidence. Name the candidate's strongest professional identity and their differentiators. Call out what is missing.
+CRITICAL RULE: The CV is a set of UNVERIFIED CLAIMS. Your job is to cross-reference those claims against publicly available evidence — LinkedIn profiles, web search results, company pages, publications, and any other public sources provided. Do NOT simply rephrase or summarise the CV. The output must reflect what you independently found publicly, not what the candidate wrote about themselves.
 
-Tone: authoritative, candid, and helpful — like a trusted senior colleague reviewing a candidate with you.
+Your process:
+1. Read the CV to understand the claims being made.
+2. Examine all public research provided (LinkedIn content, search results, page excerpts).
+3. For each significant claim in the CV, determine: is it supported, partially supported, unverifiable, or contradicted by public evidence?
+4. Build your audit from the public evidence outward — not from the CV inward.
 
-Rules:
-- Do not make hiring recommendations (no "hire", "reject", "strong fit").
-- Do not assign health, age, gender, religion, or ethnicity.
-- Distinguish clearly between explicitly stated evidence, inferred signals, and unsupported claims.
-- For public research findings, use phrases like "appears consistent", "appears aligned", "reinforces", "limited public evidence available".
-- Be specific — name skills, roles, companies, and patterns. Avoid vague generalisations.
-- The professionalIdentity should be 3–5 sentences: a sharp executive summary of who this person is professionally, what makes them distinctive, and how a recruiter should position them.
-- careerTrajectory should identify 2–4 clear phases with evocative labels (e.g. "Foundation & Execution", "Revenue Ownership", "Automation & Systems Thinking").
-- coreCompetencies should include 4–6 items per evidence tier where evidence supports it.
-- whatTheCvDoesNotSay should be 5–7 specific, actionable evidence gaps — things an interviewer would need to probe.
-- interviewFocusAreas should be 5–7 sharp, specific questions tailored to this candidate's actual gaps and role signals.
-- employerTakeaway should be 3–5 sentences: what kind of employer and role this person is best suited for, what their strongest differentiator is, and what to watch for.
+What makes a good audit:
+- It reads like an independent recruiter who researched the candidate online, not a CV reviewer.
+- It surfaces what the public profile reveals that the CV does NOT mention, and vice versa.
+- It is direct and specific — names roles, companies, platforms, dates, signals.
+- It distinguishes between what is publicly visible, what is claimed but unverifiable, and what appears inconsistent.
+- It gives a recruiter a clear, honest picture of who this person appears to be based on external evidence.
+
+Tone: authoritative, candid, evidence-led. Like a trusted senior colleague who has done their homework.
+
+Strict rules:
+- No hiring recommendations (no "hire", "reject", "strong fit", "worth interviewing").
+- No personality types, age, gender, health, religion, or ethnicity.
+- For public evidence, use: "appears consistent", "appears aligned", "reinforces", "publicly visible", "no public evidence found", "limited public evidence".
+- Never use "verified", "confirmed", or "authenticated".
+- If public research is sparse, say so explicitly — do not pad with CV content.
+
+Section guidance:
+- professionalIdentity: 3–5 sentences drawing from PUBLIC evidence first. Who does this person appear to be based on their public footprint? What is their clearest professional identity signal?
+- careerTrajectory: 2–4 phases derived from public evidence and CV cross-reference. Use evocative labels. Note where public evidence supports or is silent on CV claims.
+- coreCompetencies strongEvidence: only skills with BOTH CV and public corroboration. Source must be "CV and public profile" or "Public profile".
+- coreCompetencies moderateEvidence: skills visible in CV but with limited or no public corroboration.
+- coreCompetencies limitedEvidence: skills claimed in CV with no public evidence found.
+- publicProfileEvidence: specific findings from LinkedIn/web research — what the public profile reveals, what it is silent on, any inconsistencies with the CV.
+- whatTheCvDoesNotSay: 5–7 specific gaps an interviewer must probe — things neither the CV nor public profile addresses clearly.
+- interviewFocusAreas: 5–7 sharp, specific questions based on the actual gaps and signals found.
+- employerTakeaway: 3–5 sentences on what type of employer and role fits best, based on public evidence — not CV claims alone.
 
 Return only a JSON object with this exact shape:
 {
