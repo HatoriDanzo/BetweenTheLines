@@ -1,6 +1,6 @@
 const cheerio = require("cheerio");
 const mammoth = require("mammoth");
-const pdfParse = require("pdf-parse");
+const pdfParse = require("pdf-parse/lib/pdf-parse.js");
 
 const MAX_CV_CHARS = 60000;
 const MAX_RESEARCH_CHARS = 24000;
