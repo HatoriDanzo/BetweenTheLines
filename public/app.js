@@ -134,7 +134,7 @@ form.addEventListener("submit", async (event) => {
   }
 
   if (file.size > 6 * 1024 * 1024) {
-    renderError("Please upload a CV under 6 MB for this Netlify demo.");
+    renderError("Please upload a CV under 6 MB.");
     return;
   }
 
@@ -241,13 +241,13 @@ function renderReport(data) {
   const profile = audit.extractedProfile || {};
   const candidateName = profile.name || "Candidate";
   const role = firstNonEmpty(profile.jobTitles) || firstNonEmpty(profile.skills) || "Professional audit";
-  const modeLabel = data.mode === "demo" ? "Demo Mode" : data.mode === "sample" ? "Sample" : "Complete";
+  const isSample = data.mode === "sample";
 
   showView("report");
   report.innerHTML = `
     <div class="ci-report-header">
       <div>
-        <div class="ci-report-kicker">Analysis report <span class="ci-mode-chip">${escapeHtml(modeLabel)}</span></div>
+        <div class="ci-report-kicker">Analysis report${isSample ? ' <span class="ci-mode-chip">Sample</span>' : ""}</div>
         <div class="ci-report-name">${escapeHtml(candidateName)}</div>
         <div class="ci-report-role">${escapeHtml(role)}</div>
         <div class="ci-report-meta">Generated ${escapeHtml(new Date().toLocaleDateString(undefined, { month: "long", year: "numeric" }))} · Based on submitted CV and public evidence where accessible</div>

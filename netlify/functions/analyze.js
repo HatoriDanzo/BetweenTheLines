@@ -31,10 +31,9 @@ exports.handler = async (event) => {
     const apiKey = process.env.ANTHROPIC_API_KEY;
 
     if (!apiKey) {
-      return json(200, {
-        mode: "demo",
-        audit: buildDemoAudit(cvText, extractedProfile, research),
-        research
+      return json(503, {
+        error:
+          "The analysis service is not configured. ANTHROPIC_API_KEY is missing from the environment."
       });
     }
 
@@ -382,7 +381,7 @@ async function generateAuditWithClaude({ apiKey, cvText, extractedProfile, resea
     },
     body: JSON.stringify({
       model,
-      max_tokens: 4096,
+      max_tokens: 8192,
       system: systemPrompt(),
       messages: [{ role: "user", content: userContent }]
     })
@@ -400,42 +399,70 @@ async function generateAuditWithClaude({ apiKey, cvText, extractedProfile, resea
 
 function systemPrompt() {
   return `
-You are a Senior Talent Assessment Consultant and Executive Recruiter with 20+ years of experience.
+You are a Senior Talent Assessment Consultant and Executive Recruiter with 20+ years of experience placing candidates at FTSE 100, Fortune 500, and high-growth technology companies. You have been hired to produce a thorough, evidence-led recruiter intelligence report on this candidate — the kind of deep briefing a senior partner would hand to a hiring director before a C-suite search.
 
-CRITICAL RULE: The CV is a set of UNVERIFIED CLAIMS. Your job is to cross-reference those claims against publicly available evidence — LinkedIn profiles, web search results, company pages, publications, and any other public sources provided. Do NOT simply rephrase or summarise the CV. The output must reflect what you independently found publicly, not what the candidate wrote about themselves.
+CRITICAL RULE: The CV is a set of UNVERIFIED CLAIMS. Your job is to cross-reference every significant claim against publicly available evidence — LinkedIn profiles, web search results, company pages, publications, GitHub, portfolio sites, and any other public sources provided. Do NOT rephrase or summarise the CV. Build the audit from public evidence outward.
+
+DEPTH REQUIREMENT: Every section must be substantive and specific. Generic observations are not acceptable. Recruiters reading this report expect senior-level analysis — not bullet points or surface-level paraphrasing. Write as a trusted colleague who has spent two hours researching this candidate online and is now briefing a partner. Use full sentences, name specifics, and draw clear distinctions.
 
 Your process:
-1. Read the CV to understand the claims being made.
-2. Examine all public research provided (LinkedIn content, search results, page excerpts).
-3. For each significant claim in the CV, determine: is it supported, partially supported, unverifiable, or contradicted by public evidence?
-4. Build your audit from the public evidence outward — not from the CV inward.
+1. Read the CV to identify the claims being made.
+2. Examine ALL public research provided (LinkedIn, search results, page excerpts, portfolio, GitHub).
+3. For each significant claim, determine: supported / partially supported / unverifiable / contradicted by public evidence.
+4. Write from the public evidence outward — not from the CV inward.
 
-What makes a good audit:
-- It reads like an independent recruiter who researched the candidate online, not a CV reviewer.
-- It surfaces what the public profile reveals that the CV does NOT mention, and vice versa.
-- It is direct and specific — names roles, companies, platforms, dates, signals.
-- It distinguishes between what is publicly visible, what is claimed but unverifiable, and what appears inconsistent.
-- It gives a recruiter a clear, honest picture of who this person appears to be based on external evidence.
+MANDATORY depth per section:
 
-Tone: authoritative, candid, evidence-led. Like a trusted senior colleague who has done their homework.
+professionalIdentity — 5 to 7 sentences minimum:
+- Who does this person appear to be based on their PUBLIC footprint, NOT their CV?
+- What is their clearest professional identity signal from the public record?
+- What domain and seniority level does public evidence suggest?
+- Is there alignment or a gap between how they present themselves and what the public evidence shows?
+- What is the single strongest public signal about their professional character?
+
+careerTrajectory — 3 to 5 phases minimum:
+- Trace the career arc using BOTH public evidence and CV.
+- Each phase needs a compelling, specific label (not generic) and a 2–4 sentence narrative.
+- Identify where public evidence supports, extends, contradicts, or is entirely silent on CV claims.
+- Note any unexplained transitions, gaps in tenure, lateral moves, or acceleration.
+
+coreCompetencies:
+- strongEvidence: 4–6 skills with BOTH CV presence and specific public corroboration. Name the source (LinkedIn headline, GitHub repo, publication, article, media mention). Be explicit about the evidence.
+- moderateEvidence: 4–6 skills present in CV with limited or no public corroboration. Explain exactly what is missing.
+- limitedEvidence: 3–5 skills claimed in CV with zero public evidence found. State this plainly.
+
+publicProfileEvidence — 5 to 7 findings minimum:
+- Specific findings from LinkedIn, web search, portfolio, GitHub, or any other public source — with source name or URL where available.
+- What the public profile reveals that the CV does NOT mention.
+- What the CV claims that the public profile is silent on.
+- Any inconsistencies or discrepancies between CV and public profile.
+- Overall public footprint strength: strong / moderate / limited — and what that signals to a recruiter.
+
+whatTheCvDoesNotSay — 8 to 10 specific gaps minimum:
+- Concrete, specific gaps tied to THIS candidate's profile — not generic recruitment advice.
+- Frame each as a question a senior interviewer would have after reviewing both the CV and the public evidence.
+- Examples: missing revenue accountability, unclear team size, unexplained company exit, absent public portfolio, no evidence of claimed leadership scale.
+
+interviewFocusAreas — 8 to 10 targeted questions minimum:
+- Sharp, specific questions a senior recruiter would ask in a briefing call.
+- Each question must target a specific, identifiable gap or ambiguity found in this audit.
+- Frame them as a senior recruiter would — direct, probing, commercially grounded.
+- Do NOT ask generic interview questions. Each question must be traceable to a finding in this report.
+
+employerTakeaway — 4 to 6 sentences minimum:
+- What type of organisation, stage, and role does public evidence suggest this candidate fits?
+- What does this candidate clearly bring, based on evidence — not CV claims?
+- What are the key unknowns or risk factors a hiring manager should validate before proceeding?
+- What kind of mandate would play to their evidenced strengths?
+
+Tone: authoritative, candid, evidence-led. Like a trusted senior colleague who has done their homework and is not afraid to name what they found — and what they did not find.
 
 Strict rules:
 - No hiring recommendations (no "hire", "reject", "strong fit", "worth interviewing").
 - No personality types, age, gender, health, religion, or ethnicity.
-- For public evidence, use: "appears consistent", "appears aligned", "reinforces", "publicly visible", "no public evidence found", "limited public evidence".
+- Use: "appears consistent", "publicly visible", "no public evidence found", "limited public evidence", "the public record suggests".
 - Never use "verified", "confirmed", or "authenticated".
-- If public research is sparse, say so explicitly — do not pad with CV content.
-
-Section guidance:
-- professionalIdentity: 3–5 sentences drawing from PUBLIC evidence first. Who does this person appear to be based on their public footprint? What is their clearest professional identity signal?
-- careerTrajectory: 2–4 phases derived from public evidence and CV cross-reference. Use evocative labels. Note where public evidence supports or is silent on CV claims.
-- coreCompetencies strongEvidence: only skills with BOTH CV and public corroboration. Source must be "CV and public profile" or "Public profile".
-- coreCompetencies moderateEvidence: skills visible in CV but with limited or no public corroboration.
-- coreCompetencies limitedEvidence: skills claimed in CV with no public evidence found.
-- publicProfileEvidence: specific findings from LinkedIn/web research — what the public profile reveals, what it is silent on, any inconsistencies with the CV.
-- whatTheCvDoesNotSay: 5–7 specific gaps an interviewer must probe — things neither the CV nor public profile addresses clearly.
-- interviewFocusAreas: 5–7 sharp, specific questions based on the actual gaps and signals found.
-- employerTakeaway: 3–5 sentences on what type of employer and role fits best, based on public evidence — not CV claims alone.
+- If public research is sparse, say so explicitly and explain what that sparseness signals — do not pad with CV content.
 
 Return only a JSON object with this exact shape:
 {
@@ -500,79 +527,6 @@ function normalizeAudit(audit, fallbackProfile) {
   };
 }
 
-function buildDemoAudit(cvText, profile, research) {
-  const hasPublicEvidence =
-    research.suppliedUrls.some((item) => item.status === "collected") ||
-    research.searchFindings.some((item) => item.results.length);
-
-  return normalizeAudit(
-    {
-      extractedProfile: profile,
-      professionalIdentity: `Appears to be a ${profile.industry} professional with experience signals around ${joinOrFallback(
-        profile.skills.slice(0, 4),
-        "operational execution, stakeholder coordination, and role-specific delivery"
-      )}. This demo-mode interpretation is based on extracted CV text and does not replace the Claude audit.`,
-      careerTrajectory: [
-        {
-          label: "Foundation and Execution",
-          narrative:
-            "The CV appears to establish hands-on responsibility and functional delivery before broader ownership can be assessed."
-        },
-        {
-          label: "Ownership Signals",
-          narrative:
-            "Role titles and recurring skill themes suggest possible expansion into ownership, but scope, scale, and measurable outcomes need clarification."
-        }
-      ],
-      coreCompetencies: {
-        strongEvidence: profile.skills.slice(0, 3).map((skill) => ({
-          competency: titleCase(skill),
-          evidence: "The term appears directly in the CV text.",
-          source: "CV"
-        })),
-        moderateEvidence: profile.jobTitles.slice(0, 3).map((title) => ({
-          competency: title,
-          evidence: "The role/title appears in the CV, but seniority and impact require supporting detail.",
-          source: "CV"
-        })),
-        limitedEvidence: [
-          {
-            competency: "Commercial impact",
-            evidence: "Impact may be present, but quantified revenue, budget, or growth ownership was not clearly extracted.",
-            source: "CV"
-          }
-        ]
-      },
-      publicProfileEvidence: [
-        {
-          finding: hasPublicEvidence
-            ? "Publicly available professional information appears available for recruiter review."
-            : "Limited public professional evidence was identified from the supplied inputs.",
-          detail:
-            "Demo mode collected public snippets where accessible, but Claude analysis is required for deeper cross-reference.",
-          source: "Public web"
-        }
-      ],
-      whatTheCvDoesNotSay: [
-        "Revenue responsibility or commercial targets are not clearly evidenced.",
-        "Budget ownership is not clearly evidenced.",
-        "Team size and leadership scope require clarification.",
-        "The scale of measurable achievements may need stronger evidence.",
-        "Certifications and formal credentials require clearer supporting detail if relevant."
-      ],
-      interviewFocusAreas: [
-        "Which achievements best demonstrate measurable commercial or operational impact?",
-        "What revenue, budget, or target ownership did the candidate personally hold?",
-        "How large were the teams, vendors, or stakeholder groups involved?",
-        "Which claims are directly supported by public portfolio, profile, or project evidence?",
-        "What would previous managers identify as the candidate's strongest repeatable contribution?"
-      ],
-      employerTakeaway:
-        "A company may be interested in interviewing this candidate if the role values the extracted domain signals, while using the interview to clarify scale, ownership, and evidence gaps."
-    },
-    profile
-  );
-}
 
 function stripCodeFence(value = "") {
   return value.replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
