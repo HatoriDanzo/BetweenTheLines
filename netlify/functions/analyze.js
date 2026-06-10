@@ -28,7 +28,7 @@ exports.handler = async (event) => {
 
     const extractedProfile = extractSignals(cvText);
     const research = await collectResearch(body.urls || {}, extractedProfile);
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = process.env.OPENAI_API_KEY;
 
     if (!apiKey) {
       return json(200, {
@@ -38,7 +38,7 @@ exports.handler = async (event) => {
       });
     }
 
-    const audit = await generateAuditWithGemini({
+    const audit = await generateAuditWithOpenAI({
       apiKey,
       cvText,
       extractedProfile,
@@ -52,10 +52,10 @@ exports.handler = async (event) => {
     });
   } catch (error) {
     console.error(error);
-    if (error.message?.startsWith("Gemini request failed")) {
+    if (error.message?.startsWith("OpenAI request failed")) {
       return json(502, {
         error:
-          "Gemini analysis failed. Check that GEMINI_API_KEY is a valid Google AI Studio key and that the Gemini API is enabled."
+          "OpenAI analysis failed. Check that OPENAI_API_KEY is a valid key and the account has credits."
       });
     }
 
@@ -322,71 +322,70 @@ function normalizeUrl(value = "") {
   }
 }
 
-async function generateAuditWithGemini({ apiKey, cvText, extractedProfile, research }) {
-  const model = process.env.GEMINI_MODEL || "gemini-2.5-flash";
-  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+async function generateAuditWithOpenAI({ apiKey, cvText, extractedProfile, research }) {
+  const model = process.env.OPENAI_MODEL || "gpt-4o";
+  const endpoint = "https://api.openai.com/v1/chat/completions";
 
   const response = await fetch(endpoint, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`
+    },
     body: JSON.stringify({
-      systemInstruction: {
-        parts: [{ text: systemPrompt() }]
-      },
-      contents: [
+      model,
+      temperature: 0.3,
+      response_format: { type: "json_object" },
+      messages: [
+        { role: "system", content: systemPrompt() },
         {
           role: "user",
-          parts: [
+          content: JSON.stringify(
             {
-              text: JSON.stringify(
-                {
-                  cvText,
-                  extractedProfile,
-                  publicResearch: compactResearch(research)
-                },
-                null,
-                2
-              )
-            }
-          ]
+              cvText,
+              extractedProfile,
+              publicResearch: compactResearch(research)
+            },
+            null,
+            2
+          )
         }
-      ],
-      generationConfig: {
-        temperature: 0.25,
-        responseMimeType: "application/json"
-      }
+      ]
     })
   });
 
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(`Gemini request failed: ${text}`);
+    throw new Error(`OpenAI request failed: ${text}`);
   }
 
   const data = await response.json();
-  const text = data.candidates?.[0]?.content?.parts?.map((part) => part.text).join("") || "{}";
+  const text = data.choices?.[0]?.message?.content || "{}";
   return JSON.parse(stripCodeFence(text));
 }
 
 function systemPrompt() {
   return `
-Act as a Senior Recruiter, Talent Assessment Consultant, and Hiring Manager.
+You are a Senior Talent Assessment Consultant and Executive Recruiter with 20+ years of experience. You read CVs the way a seasoned hiring manager does — not summarising, but interpreting. You form sharp, opinionated views on professional identity, trajectory, and fit.
 
-Do not summarize the CV. Interpret the CV.
-Identify professional identity, career trajectory, core strengths, missing evidence, public evidence alignment, and interview focus areas.
+Your job is to produce an in-depth professional audit that reads like expert recruiter commentary, not a generic summary. Be direct, specific, and insightful. Draw clear conclusions from the evidence. Name the candidate's strongest professional identity and their differentiators. Call out what is missing.
 
-Always distinguish between:
-1. Information explicitly stated.
-2. Information inferred.
-3. Information unsupported.
+Tone: authoritative, candid, and helpful — like a trusted senior colleague reviewing a candidate with you.
 
-Never invent facts. Never recommend hiring or rejection. Never say "hire", "reject", "strong fit", "promising fit", "worth interviewing", "not worth interviewing", "recommended", or "not recommended". Never assign personality types, trust scores, age, gender, religion, ethnicity, or health status. Avoid pseudoscientific scoring.
+Rules:
+- Do not make hiring recommendations (no "hire", "reject", "strong fit").
+- Do not assign health, age, gender, religion, or ethnicity.
+- Distinguish clearly between explicitly stated evidence, inferred signals, and unsupported claims.
+- For public research findings, use phrases like "appears consistent", "appears aligned", "reinforces", "limited public evidence available".
+- Be specific — name skills, roles, companies, and patterns. Avoid vague generalisations.
+- The professionalIdentity should be 3–5 sentences: a sharp executive summary of who this person is professionally, what makes them distinctive, and how a recruiter should position them.
+- careerTrajectory should identify 2–4 clear phases with evocative labels (e.g. "Foundation & Execution", "Revenue Ownership", "Automation & Systems Thinking").
+- coreCompetencies should include 4–6 items per evidence tier where evidence supports it.
+- whatTheCvDoesNotSay should be 5–7 specific, actionable evidence gaps — things an interviewer would need to probe.
+- interviewFocusAreas should be 5–7 sharp, specific questions tailored to this candidate's actual gaps and role signals.
+- employerTakeaway should be 3–5 sentences: what kind of employer and role this person is best suited for, what their strongest differentiator is, and what to watch for.
 
-The employer takeaway must explain why an employer may want to explore the candidate in an interview without ranking the candidate, endorsing the candidate, or making a hiring recommendation.
-
-Use evidence-based language. For public evidence, never use "verified", "confirmed", or "authenticated". Use phrases such as "appears consistent", "appears aligned", "reinforces", and "limited evidence available".
-
-Return only JSON with this exact shape:
+Return only a JSON object with this exact shape:
 {
   "extractedProfile": {
     "name": "string",
