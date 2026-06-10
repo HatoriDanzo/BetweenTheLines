@@ -60,7 +60,8 @@ exports.handler = async (event) => {
     }
 
     return json(500, {
-      error: "The audit service hit an unexpected issue while processing this CV."
+      error: "The audit service hit an unexpected issue while processing this CV.",
+      _debug: error.message
     });
   }
 };
