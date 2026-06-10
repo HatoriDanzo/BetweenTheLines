@@ -28,7 +28,7 @@ exports.handler = async (event) => {
 
     const extractedProfile = extractSignals(cvText);
     const research = await collectResearch(body.urls || {}, extractedProfile);
-    const apiKey = process.env.OPENAI_API_KEY;
+    const apiKey = process.env.ANTHROPIC_API_KEY;
 
     if (!apiKey) {
       return json(200, {
@@ -38,7 +38,7 @@ exports.handler = async (event) => {
       });
     }
 
-    const audit = await generateAuditWithOpenAI({
+    const audit = await generateAuditWithClaude({
       apiKey,
       cvText,
       extractedProfile,
@@ -52,16 +52,15 @@ exports.handler = async (event) => {
     });
   } catch (error) {
     console.error(error);
-    if (error.message?.startsWith("OpenAI request failed")) {
+    if (error.message?.startsWith("Claude request failed")) {
       return json(502, {
         error:
-          "OpenAI analysis failed. Check that OPENAI_API_KEY is a valid key and the account has credits."
+          "Claude analysis failed. Check that ANTHROPIC_API_KEY is a valid key and the account has credits."
       });
     }
 
     return json(500, {
-      error: "The audit service hit an unexpected issue while processing this CV.",
-      _debug: error.message
+      error: "The audit service hit an unexpected issue while processing this CV."
     });
   }
 };
@@ -360,45 +359,42 @@ function normalizeUrl(value = "") {
   }
 }
 
-async function generateAuditWithOpenAI({ apiKey, cvText, extractedProfile, research }) {
-  const model = process.env.OPENAI_MODEL || "gpt-4o";
-  const endpoint = "https://api.openai.com/v1/chat/completions";
+async function generateAuditWithClaude({ apiKey, cvText, extractedProfile, research }) {
+  const model = process.env.CLAUDE_MODEL || "claude-opus-4-8";
+  const endpoint = "https://api.anthropic.com/v1/messages";
+
+  const userContent = JSON.stringify(
+    {
+      cvText,
+      extractedProfile,
+      publicResearch: compactResearch(research)
+    },
+    null,
+    2
+  );
 
   const response = await fetch(endpoint, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01"
     },
     body: JSON.stringify({
       model,
-      temperature: 0.3,
-      response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: systemPrompt() },
-        {
-          role: "user",
-          content: JSON.stringify(
-            {
-              cvText,
-              extractedProfile,
-              publicResearch: compactResearch(research)
-            },
-            null,
-            2
-          )
-        }
-      ]
+      max_tokens: 4096,
+      system: systemPrompt(),
+      messages: [{ role: "user", content: userContent }]
     })
   });
 
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(`OpenAI request failed: ${text}`);
+    throw new Error(`Claude request failed: ${text}`);
   }
 
   const data = await response.json();
-  const text = data.choices?.[0]?.message?.content || "{}";
+  const text = data.content?.[0]?.text || "{}";
   return JSON.parse(stripCodeFence(text));
 }
 
@@ -515,7 +511,7 @@ function buildDemoAudit(cvText, profile, research) {
       professionalIdentity: `Appears to be a ${profile.industry} professional with experience signals around ${joinOrFallback(
         profile.skills.slice(0, 4),
         "operational execution, stakeholder coordination, and role-specific delivery"
-      )}. This demo-mode interpretation is based on extracted CV text and does not replace the Gemini audit.`,
+      )}. This demo-mode interpretation is based on extracted CV text and does not replace the Claude audit.`,
       careerTrajectory: [
         {
           label: "Foundation and Execution",
@@ -553,7 +549,7 @@ function buildDemoAudit(cvText, profile, research) {
             ? "Publicly available professional information appears available for recruiter review."
             : "Limited public professional evidence was identified from the supplied inputs.",
           detail:
-            "Demo mode collected public snippets where accessible, but Gemini analysis is required for deeper cross-reference.",
+            "Demo mode collected public snippets where accessible, but Claude analysis is required for deeper cross-reference.",
           source: "Public web"
         }
       ],
