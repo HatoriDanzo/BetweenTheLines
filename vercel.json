@@ -1,9 +1,8 @@
 {
   "outputDirectory": "public",
   "functions": {
-    "api/analyze.js": {
-      "maxDuration": 60
-    }
+    "api/analyze.js": { "maxDuration": 60 },
+    "api/og.js": { "maxDuration": 10 }
   },
   "rewrites": [
     { "source": "/((?!api/).*)", "destination": "/index.html" }
