@@ -4,7 +4,8 @@ const pdfParse = require("pdf-parse/lib/pdf-parse.js");
 
 const MAX_CV_CHARS = 60000;
 const MAX_RESEARCH_CHARS = 48000;
-const URL_FETCH_TIMEOUT_MS = 7000;
+const URL_FETCH_TIMEOUT_MS = 4000;
+const GROQ_TIMEOUT_MS = 55000;
 
 exports.handler = async (event) => {
   if (event.httpMethod !== "POST") {
@@ -27,7 +28,11 @@ exports.handler = async (event) => {
     }
 
     const extractedProfile = extractSignals(cvText);
-    const research = await collectResearch(body.urls || {}, extractedProfile);
+    const research = await collectResearch(body.urls || {}, extractedProfile).catch(() => ({
+      suppliedUrls: [],
+      queries: [],
+      searchFindings: []
+    }));
     const apiKey = process.env.GROQ_API_KEY;
 
     if (!apiKey) {
@@ -57,8 +62,9 @@ exports.handler = async (event) => {
       });
     }
 
+    const safeMsg = String(error.message || "unknown error").slice(0, 300);
     return json(500, {
-      error: `Unexpected error: ${error.message}`
+      error: `Unexpected error: ${safeMsg}`
     });
   }
 };
@@ -203,11 +209,9 @@ async function collectResearch(urls, profile) {
   );
 
   const queries = buildSearchQueries(profile);
-  const searchFindings = [];
-  for (const query of queries) {
-    const results = await searchPublicWeb(query);
-    searchFindings.push({ query, results });
-  }
+  const searchFindings = await Promise.all(
+    queries.map(async (query) => ({ query, results: await searchPublicWeb(query) }))
+  );
 
   return {
     suppliedUrls: suppliedFindings,
@@ -228,7 +232,7 @@ function buildSearchQueries(profile) {
     [name, profile.companies[0], profile.industry].filter(Boolean).join(" ")
   ].filter((query) => query && query.length > 6);
 
-  return unique(parts).slice(0, 5);
+  return unique(parts).slice(0, 3);
 }
 
 async function fetchPageEvidence(url) {
@@ -371,38 +375,68 @@ async function generateAuditWithGroq({ apiKey, cvText, extractedProfile, researc
     2
   );
 
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`
-    },
-    body: JSON.stringify({
-      model,
-      max_tokens: 8192,
-      temperature: 0.3,
-      messages: [
-        { role: "system", content: systemPrompt() },
-        { role: "user", content: userContent + "\n\nRespond with a single JSON object only. No prose before or after. Every string value must be enclosed in double quotes on one line." }
-      ]
-    })
-  });
+  const controller = new AbortController();
+  const groqTimeout = setTimeout(() => controller.abort(), GROQ_TIMEOUT_MS);
+
+  let response;
+  try {
+    response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`
+      },
+      signal: controller.signal,
+      body: JSON.stringify({
+        model,
+        max_tokens: 8192,
+        temperature: 0.3,
+        response_format: { type: "json_object" },
+        messages: [
+          { role: "system", content: systemPrompt() },
+          {
+            role: "user",
+            content:
+              userContent +
+              "\n\nIMPORTANT: Return ONLY a valid JSON object. Every string value must be on one line and wrapped in double quotes. Do not leave any string value unquoted."
+          }
+        ]
+      })
+    });
+  } catch (fetchError) {
+    if (fetchError.name === "AbortError") throw new Error("Groq request failed: timed out after 55s.");
+    throw new Error(`Groq request failed: network error — ${fetchError.message}`);
+  } finally {
+    clearTimeout(groqTimeout);
+  }
 
   const rawText = await response.text();
   let data;
-  try { data = JSON.parse(rawText); } catch { throw new Error(`Groq request failed: ${rawText}`); }
+  try {
+    data = JSON.parse(rawText);
+  } catch {
+    throw new Error("Groq request failed: unreadable response from AI service.");
+  }
 
   if (!response.ok) {
-    // Groq includes failed_generation on json_validate_failed — try to salvage it
+    // json_validate_failed: Groq provides failed_generation — try to repair and use it
     const failedGen = data.error?.failed_generation;
     if (failedGen) {
-      try { return JSON.parse(extractJson(repairUnquotedStrings(failedGen))); } catch {}
+      try {
+        return JSON.parse(extractJson(repairUnquotedStrings(failedGen)));
+      } catch {}
     }
-    throw new Error(`Groq request failed: ${rawText}`);
+    const msg = data.error?.message || "unknown error";
+    throw new Error(`Groq request failed: ${msg.slice(0, 200)}`);
   }
 
   const text = data.choices?.[0]?.message?.content || "{}";
-  return JSON.parse(extractJson(text));
+  try {
+    return JSON.parse(extractJson(text));
+  } catch {
+    // Repair attempt: model may have dropped quotes on long string values
+    return JSON.parse(extractJson(repairUnquotedStrings(text)));
+  }
 }
 
 function systemPrompt() {
