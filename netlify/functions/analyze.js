@@ -28,16 +28,16 @@ exports.handler = async (event) => {
 
     const extractedProfile = extractSignals(cvText);
     const research = await collectResearch(body.urls || {}, extractedProfile);
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = process.env.GROQ_API_KEY;
 
     if (!apiKey) {
       return json(503, {
         error:
-          "The analysis service is not configured. GEMINI_API_KEY is missing from the environment."
+          "The analysis service is not configured. GROQ_API_KEY is missing from the environment."
       });
     }
 
-    const audit = await generateAuditWithGemini({
+    const audit = await generateAuditWithGroq({
       apiKey,
       cvText,
       extractedProfile,
@@ -51,7 +51,7 @@ exports.handler = async (event) => {
     });
   } catch (error) {
     console.error(error);
-    if (error.message?.startsWith("Gemini request failed:")) {
+    if (error.message?.startsWith("Groq request failed:")) {
       return json(502, {
         error: error.message
       });
@@ -357,9 +357,9 @@ function normalizeUrl(value = "") {
   }
 }
 
-async function generateAuditWithGemini({ apiKey, cvText, extractedProfile, research }) {
-  const model = process.env.GEMINI_MODEL || "gemini-2.0-flash";
-  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+async function generateAuditWithGroq({ apiKey, cvText, extractedProfile, research }) {
+  const model = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
+  const endpoint = "https://api.groq.com/openai/v1/chat/completions";
 
   const userContent = JSON.stringify(
     {
@@ -373,24 +373,28 @@ async function generateAuditWithGemini({ apiKey, cvText, extractedProfile, resea
 
   const response = await fetch(endpoint, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`
+    },
     body: JSON.stringify({
-      system_instruction: { parts: [{ text: systemPrompt() }] },
-      contents: [{ role: "user", parts: [{ text: userContent }] }],
-      generationConfig: {
-        maxOutputTokens: 8192,
-        temperature: 0.3
-      }
+      model,
+      max_tokens: 8192,
+      temperature: 0.3,
+      messages: [
+        { role: "system", content: systemPrompt() },
+        { role: "user", content: userContent }
+      ]
     })
   });
 
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(`Gemini request failed: ${text}`);
+    throw new Error(`Groq request failed: ${text}`);
   }
 
   const data = await response.json();
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
+  const text = data.choices?.[0]?.message?.content || "{}";
   return JSON.parse(stripCodeFence(text));
 }
 
