@@ -381,6 +381,7 @@ async function generateAuditWithGroq({ apiKey, cvText, extractedProfile, researc
       model,
       max_tokens: 8192,
       temperature: 0.3,
+      response_format: { type: "json_object" },
       messages: [
         { role: "system", content: systemPrompt() },
         { role: "user", content: userContent }
@@ -395,7 +396,7 @@ async function generateAuditWithGroq({ apiKey, cvText, extractedProfile, researc
 
   const data = await response.json();
   const text = data.choices?.[0]?.message?.content || "{}";
-  return JSON.parse(stripCodeFence(text));
+  return JSON.parse(extractJson(text));
 }
 
 function systemPrompt() {
@@ -529,8 +530,14 @@ function normalizeAudit(audit, fallbackProfile) {
 }
 
 
-function stripCodeFence(value = "") {
-  return value.replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
+function extractJson(value = "") {
+  // Strip markdown code fences if present
+  const stripped = value.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+  // If it starts with { it's already JSON
+  if (stripped.startsWith("{")) return stripped;
+  // Try to extract the first {...} block from mixed text
+  const match = stripped.match(/\{[\s\S]*\}/);
+  return match ? match[0] : "{}";
 }
 
 function unique(items) {
