@@ -1,10 +1,11 @@
 {
+  "outputDirectory": "public",
   "functions": {
     "api/analyze.js": {
       "maxDuration": 60
     }
   },
   "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]
 }
