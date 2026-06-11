@@ -381,20 +381,26 @@ async function generateAuditWithGroq({ apiKey, cvText, extractedProfile, researc
       model,
       max_tokens: 8192,
       temperature: 0.3,
-      response_format: { type: "json_object" },
       messages: [
         { role: "system", content: systemPrompt() },
-        { role: "user", content: userContent }
+        { role: "user", content: userContent + "\n\nRespond with a single JSON object only. No prose before or after. Every string value must be enclosed in double quotes on one line." }
       ]
     })
   });
 
+  const rawText = await response.text();
+  let data;
+  try { data = JSON.parse(rawText); } catch { throw new Error(`Groq request failed: ${rawText}`); }
+
   if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`Groq request failed: ${text}`);
+    // Groq includes failed_generation on json_validate_failed — try to salvage it
+    const failedGen = data.error?.failed_generation;
+    if (failedGen) {
+      try { return JSON.parse(extractJson(repairUnquotedStrings(failedGen))); } catch {}
+    }
+    throw new Error(`Groq request failed: ${rawText}`);
   }
 
-  const data = await response.json();
   const text = data.choices?.[0]?.message?.content || "{}";
   return JSON.parse(extractJson(text));
 }
@@ -531,13 +537,25 @@ function normalizeAudit(audit, fallbackProfile) {
 
 
 function extractJson(value = "") {
-  // Strip markdown code fences if present
   const stripped = value.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
-  // If it starts with { it's already JSON
   if (stripped.startsWith("{")) return stripped;
-  // Try to extract the first {...} block from mixed text
   const match = stripped.match(/\{[\s\S]*\}/);
   return match ? match[0] : "{}";
+}
+
+function repairUnquotedStrings(text) {
+  // Llama sometimes emits: "key": \n  unquoted text  \n  "nextKey"
+  // Fix by quoting the unquoted value
+  return text.replace(
+    /("(?:\w+)")\s*:\s*\n(\s*)([A-Z][^\n"{\[]+(?:\n(?!\s*["{}\[]).*)*)/g,
+    (_, key, _indent, value) => {
+      const safe = value.trim()
+        .replace(/\\/g, "\\\\")
+        .replace(/"/g, '\\"')
+        .replace(/\s*\n\s*/g, " ");
+      return `${key}: "${safe}"`;
+    }
+  );
 }
 
 function unique(items) {
