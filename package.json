@@ -4,9 +4,9 @@
   "private": true,
   "description": "Portfolio-quality AI recruitment intelligence tool for CV and public profile assessment.",
   "scripts": {
-    "dev": "npx netlify-cli dev --dir public",
+    "dev": "npx vercel dev",
     "serve": "npx serve public",
-    "lint": "node --check netlify/functions/analyze.js && node --check public/app.js",
+    "lint": "node --check api/analyze.js && node --check public/app.js",
     "test": "npm run lint"
   },
   "dependencies": {
