@@ -199,7 +199,20 @@ async function collectResearch(urls, profile) {
 
   const queries = buildSearchQueries(profile);
   const searchFindings = await Promise.all(
-    queries.map(async (query) => ({ query, results: await searchPublicWeb(query) }))
+    queries.map(async (query) => {
+      const [ddg, bing] = await Promise.all([
+        duckDuckGoSnippets(query),
+        bingSnippets(query)
+      ]);
+      // Merge and deduplicate by title
+      const seen = new Set();
+      const merged = [...ddg, ...bing].filter((r) => {
+        if (seen.has(r.title)) return false;
+        seen.add(r.title);
+        return !r.url.includes("linkedin.com");
+      }).slice(0, 6);
+      return { query, results: merged };
+    })
   );
 
   return {
@@ -214,19 +227,19 @@ function buildSearchQueries(profile) {
   if (!name) return [];
 
   const parts = [
-    `"${name}" LinkedIn`,
-    [name, profile.companies[0]].filter(Boolean).join(" ") + " LinkedIn",
+    [name, profile.companies[0]].filter(Boolean).join(" "),
     [name, profile.jobTitles[0]].filter(Boolean).join(" "),
-    `"${name}" site:linkedin.com`,
-    [name, profile.companies[0], profile.industry].filter(Boolean).join(" ")
+    [name, profile.industry, "professional"].filter(Boolean).join(" ")
   ].filter((query) => query && query.length > 6);
 
   return unique(parts).slice(0, 3);
 }
 
 async function fetchPageEvidence(url) {
+  if (url.includes("linkedin.com")) {
+    return fetchLinkedInViaSerp(url);
+  }
   try {
-    const isLinkedIn = url.includes("linkedin.com");
     const response = await fetchWithTimeout(url, {
       headers: {
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
@@ -247,20 +260,7 @@ async function fetchPageEvidence(url) {
 
     const title = cleanText($("title").first().text()).slice(0, 160);
     const description = cleanText($('meta[name="description"]').attr("content") || "").slice(0, 500);
-
-    let pageText = "";
-    if (isLinkedIn) {
-      // LinkedIn public profiles expose structured sections
-      const sections = [
-        $('section[data-section="summary"]').text(),
-        $('section[data-section="experience"]').text(),
-        $(".profile-section-card").text(),
-        $("main").text()
-      ].filter(Boolean);
-      pageText = cleanText(sections.join(" ")).slice(0, 3000);
-    } else {
-      pageText = cleanText($("body").text()).slice(0, 2000);
-    }
+    const pageText = cleanText($("body").text()).slice(0, 2000);
 
     return {
       status: "collected",
@@ -272,7 +272,58 @@ async function fetchPageEvidence(url) {
   }
 }
 
-async function searchPublicWeb(query) {
+// LinkedIn blocks direct scraping with HTTP 999.
+// Instead, harvest the profile data from search engine snippets, which index
+// the public profile and surface headline, summary, and job history in their
+// result excerpts — no LinkedIn request needed.
+async function fetchLinkedInViaSerp(linkedInUrl) {
+  const slug = extractLinkedInSlug(linkedInUrl);
+  const queries = slug
+    ? [
+        `site:linkedin.com/in/${slug}`,
+        `linkedin.com/in/${slug} profile`
+      ]
+    : [`site:linkedin.com "${linkedInUrl}"`];
+
+  const allSnippets = [];
+
+  await Promise.all(
+    queries.map(async (query) => {
+      const [ddg, bing] = await Promise.all([
+        duckDuckGoSnippets(query),
+        bingSnippets(query)
+      ]);
+      allSnippets.push(...ddg, ...bing);
+    })
+  );
+
+  // Deduplicate and prefer LinkedIn-sourced snippets
+  const linkedInSnippets = allSnippets.filter((s) => s.url && s.url.includes("linkedin.com"));
+  const best = linkedInSnippets.length ? linkedInSnippets : allSnippets;
+
+  if (!best.length) {
+    return { status: "unavailable", title: "", excerpt: "No public LinkedIn data found via search index." };
+  }
+
+  const excerpt = best
+    .map((s) => [s.title, s.snippet].filter(Boolean).join(" — "))
+    .join(" | ")
+    .slice(0, 3000);
+
+  return { status: "collected", title: best[0]?.title || "", excerpt };
+}
+
+function extractLinkedInSlug(url) {
+  try {
+    const path = new URL(url).pathname;
+    const match = path.match(/\/in\/([^/?#]+)/);
+    return match ? match[1] : "";
+  } catch {
+    return "";
+  }
+}
+
+async function duckDuckGoSnippets(query) {
   try {
     const url = `https://duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
     const response = await fetchWithTimeout(url, {
@@ -282,39 +333,54 @@ async function searchPublicWeb(query) {
         "Accept-Language": "en-US,en;q=0.9"
       }
     });
-
     if (!response.ok) return [];
     const html = await response.text();
     const $ = cheerio.load(html);
     const results = [];
-
-    $(".result").each((_, element) => {
-      const anchor = $(element).find(".result__a").first();
+    $(".result").each((_, el) => {
+      const anchor = $(el).find(".result__a").first();
       const title = cleanText(anchor.text());
       const href = resolveDuckDuckGoUrl(anchor.attr("href"));
-      const snippet = cleanText($(element).find(".result__snippet").text());
+      const snippet = cleanText($(el).find(".result__snippet").text());
+      if (title && snippet) results.push({ title, url: href, snippet });
+    });
+    return results.slice(0, 4);
+  } catch {
+    return [];
+  }
+}
 
-      if (title && href) {
-        results.push({ title, url: href, snippet });
+async function bingSnippets(query) {
+  try {
+    const url = `https://www.bing.com/search?q=${encodeURIComponent(query)}&count=5`;
+    const response = await fetchWithTimeout(url, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9"
       }
     });
+    if (!response.ok) return [];
+    const html = await response.text();
+    const $ = cheerio.load(html);
+    const results = [];
+    $("li.b_algo").each((_, el) => {
+      const title = cleanText($(el).find("h2").text());
+      const href = $(el).find("h2 a").attr("href") || "";
+      const snippet = cleanText($(el).find(".b_caption p, .b_algoSlug").text());
+      if (title && snippet) results.push({ title, url: href, snippet });
+    });
+    return results.slice(0, 4);
+  } catch {
+    return [];
+  }
+}
 
-    const topResults = results.slice(0, 5);
-
-    // Fetch the actual LinkedIn result pages for richer text
-    const enriched = await Promise.all(
-      topResults.map(async (result) => {
-        if (result.url.includes("linkedin.com")) {
-          const page = await fetchPageEvidence(result.url);
-          if (page.status === "collected" && page.excerpt.length > 100) {
-            return { ...result, pageText: page.excerpt.slice(0, 1500) };
-          }
-        }
-        return result;
-      })
-    );
-
-    return enriched;
+async function searchPublicWeb(query) {
+  try {
+    const results = await duckDuckGoSnippets(query);
+    // Do not attempt to re-fetch LinkedIn URLs — already handled via SERP
+    return results.filter((r) => !r.url.includes("linkedin.com")).slice(0, 5);
   } catch (error) {
     return [];
   }
