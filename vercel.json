@@ -1,6 +1,5 @@
 {
   "outputDirectory": "public",
-  "deploymentProtection": "none",
   "functions": {
     "api/analyze.js": { "maxDuration": 60 }
   },
