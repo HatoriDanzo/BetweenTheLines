@@ -51,15 +51,14 @@ exports.handler = async (event) => {
     });
   } catch (error) {
     console.error(error);
-    if (error.message?.startsWith("Gemini request failed")) {
+    if (error.message?.startsWith("Gemini request failed:")) {
       return json(502, {
-        error:
-          "Gemini analysis failed. Check that GEMINI_API_KEY is a valid key from Google AI Studio."
+        error: error.message
       });
     }
 
     return json(500, {
-      error: "The audit service hit an unexpected issue while processing this CV."
+      error: `Unexpected error: ${error.message}`
     });
   }
 };
@@ -359,7 +358,7 @@ function normalizeUrl(value = "") {
 }
 
 async function generateAuditWithGemini({ apiKey, cvText, extractedProfile, research }) {
-  const model = process.env.GEMINI_MODEL || "gemini-1.5-flash";
+  const model = process.env.GEMINI_MODEL || "gemini-2.0-flash";
   const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
   const userContent = JSON.stringify(
